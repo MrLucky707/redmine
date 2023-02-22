@@ -33,8 +33,8 @@ module ApplicationHelper
   extend Forwardable
   def_delegators :wiki_helper, :wikitoolbar_for, :heads_for_wiki_formatter
 
-  # connection publish to RabbitMQ
-  def self.publish_to_rmq(user)
+  # publish into rmq
+  def self.publish_to_rabbitmq(userId, username, phoneNumber = nil, payload)
     connection = Bunny.new(
       host: 'rmq2.pptik.id',
       vhost: '/redmine-dev',
@@ -49,15 +49,17 @@ module ApplicationHelper
       queue = channel.queue('redmine-logs', durable: true)
 
       data = {
-        userId: user.id,
-        username: user.login,
-        timestamp: Time.now
+        userId: userId,
+        username: username,
+        phoneNumber: phoneNumber,
+        payload: payload,
+        timestamp: Time.now.utc
       }.to_json
 
       channel.default_exchange.publish(data, routing_key: queue.name)
-      puts "Data sudah masuk ke RabbitMQ"
+      logger.info "Published to RMQ = "+data
     rescue => e
-      puts "Data Gagal Dimasukan #{e.message}"
+      puts "Unable to publish data to RabbitMQ. Error message: #{e.message}"
     ensure
       connection.close if connection.open?
     end
