@@ -80,6 +80,13 @@ class IssuesController < ApplicationController
           @issues = @query.issues(:limit => Setting.issues_export_limit.to_i)
           send_file_headers! :type => 'application/pdf', :filename => 'issues.pdf'
         end
+
+        hariIni = helper_method
+        phone_number = User.current.custom_value_for(CustomField.where(name: 'Phone Number').first)
+        phone_number_value = phone_number ? phone_number.value : ''
+
+        ApplicationHelper.log_issue_publish_to_rabbitmq(User.current.id, User.current.name, phone_number_value, { status: 200, message: "#{User.current.name} melihat list issue dari project #{@project.name} pada hari #{hariIni}, tanggal #{Date.today.strftime("%d %B %Y")}, Jam #{Time.now.strftime("%H:%M")}" })
+
       end
     else
       respond_to do |format|
@@ -130,6 +137,13 @@ class IssuesController < ApplicationController
         send_file_headers!(:type => 'application/pdf',
                            :filename => "#{@project.identifier}-#{@issue.id}.pdf")
       end
+      hariIni = helper_method
+      phone_number = User.current.custom_value_for(CustomField.where(name: 'Phone Number').first)
+      phone_number_value = phone_number ? phone_number.value : ''
+
+      ApplicationHelper.log_issue_publish_to_rabbitmq(User.current.id, User.current.name, phone_number_value, { status: 200, message: "#{User.current.name} Melihat issue #{@issue.subject} dari project #{@project.name} Pada hari #{hariIni}, tanggal #{Date.today.strftime("%d %B %Y")}, Jam #{Time.now.strftime("%H:%M")}" })
+
+
     end
   end
 
@@ -176,6 +190,13 @@ class IssuesController < ApplicationController
         format.api  {render_validation_errors(@issue)}
       end
     end
+    hariIni = helper_method
+    phone_number = User.current.custom_value_for(CustomField.where(name: 'Phone Number').first)
+    phone_number_value = phone_number ? phone_number.value : ''
+
+    ApplicationHelper.log_issue_publish_to_rabbitmq(User.current.id, User.current.name, phone_number_value, { status: 200, message: "#{User.current.name} Menambahkan issue baru dari #{@project.name} Pada hari #{hariIni}, tanggal #{Date.today.strftime("%d %B %Y")}, Jam #{Time.now.strftime("%H:%M")}" })
+
+
   end
 
   def edit
@@ -225,6 +246,13 @@ class IssuesController < ApplicationController
         format.api  {render_validation_errors(@issue)}
       end
     end
+    hariIni = helper_method
+    phone_number = User.current.custom_value_for(CustomField.where(name: 'Phone Number').first)
+    phone_number_value = phone_number ? phone_number.value : ''
+
+    ApplicationHelper.log_issue_publish_to_rabbitmq(User.current.id, User.current.name, phone_number_value, { status: 200, message: "#{User.current.name} Mengupdate issue #{@issue.subject} dari project #{@project.name} Pada hari #{hariIni}, tanggal #{Date.today.strftime("%d %B %Y")}, Jam #{Time.now.strftime("%H:%M")}" })
+
+
   end
 
   def issue_tab
@@ -462,6 +490,13 @@ class IssuesController < ApplicationController
       end
       format.api  {render_api_ok}
     end
+    hariIni = helper_method
+    phone_number = User.current.custom_value_for(CustomField.where(name: 'Phone Number').first)
+    phone_number_value = phone_number ? phone_number.value : ''
+
+    ApplicationHelper.log_issue_publish_to_rabbitmq(User.current.id, User.current.name, phone_number_value, { status: 200, message: "#{User.current.name} Menghapus issue dari Project #{@project.name} Pada hari #{hariIni}, tanggal #{Date.today.strftime("%d %B %Y")}, Jam #{Time.now.strftime("%H:%M")}" })
+
+
   end
 
   # Overrides Redmine::MenuManager::MenuController::ClassMethods for

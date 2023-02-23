@@ -33,8 +33,23 @@ module ApplicationHelper
   extend Forwardable
   def_delegators :wiki_helper, :wikitoolbar_for, :heads_for_wiki_formatter
 
-  # publish into rmq
-  def self.publish_to_rabbitmq(userId, username, phoneNumber = nil, payload)
+  # variable to controller
+  def helper_method
+    today = Date.today.strftime("%A")
+    hariIni = case today
+      when "Monday" then "Senin"
+      when "Tuesday" then "Selasa"
+      when "Wednesday" then "Rabu"
+      when "Thursday" then "Kamis"
+      when "Friday" then "Jum'at"
+      when "Saturday" then "Sabtu"
+      when "Sunday" then "Minggu"
+      else "Hari tidak valid" 
+    end
+  end
+
+  # publish into rmq logs-login
+  def self.log_login_publish_to_rabbitmq(userId, username, phoneNumber = nil, payload)
     connection = Bunny.new(
       host: 'rmq2.pptik.id',
       vhost: '/redmine-dev',
@@ -46,7 +61,7 @@ module ApplicationHelper
     begin
       connection.start
       channel = connection.create_channel
-      queue = channel.queue('redmine-logs', durable: true)
+      queue = channel.queue('logs-login', durable: true)
 
       data = {
         userId: userId,
@@ -57,7 +72,71 @@ module ApplicationHelper
       }.to_json
 
       channel.default_exchange.publish(data, routing_key: queue.name)
-      logger.info "Published to RMQ = "+data
+      logger.info "Publish to RMQ = "+data
+    rescue => e
+      puts "Unable to publish data to RabbitMQ. Error message: #{e.message}"
+    ensure
+      connection.close if connection.open?
+    end
+  end
+
+  # publish into rmq logs-project
+  def self.log_project_publish_to_rabbitmq(userId, username, phoneNumber = nil, payload)
+    connection = Bunny.new(
+      host: 'rmq2.pptik.id',
+      vhost: '/redmine-dev',
+      port: 5672,
+      username: 'redmine-dev',
+      password: 'Er3d|01m!n3'
+    )
+
+    begin
+      connection.start
+      channel = connection.create_channel
+      queue = channel.queue('logs-project', durable: true)
+
+      data = {
+        userId: userId,
+        username: username,
+        phoneNumber: phoneNumber,
+        payload: payload,
+        timestamp: Time.now.utc
+      }.to_json
+
+      channel.default_exchange.publish(data, routing_key: queue.name)
+      logger.info "Publish to RMQ = "+data
+    rescue => e
+      puts "Unable to publish data to RabbitMQ. Error message: #{e.message}"
+    ensure
+      connection.close if connection.open?
+    end
+  end
+
+  # publish into rmq logs-project
+  def self.log_issue_publish_to_rabbitmq(userId, username, phoneNumber = nil, payload)
+    connection = Bunny.new(
+      host: 'rmq2.pptik.id',
+      vhost: '/redmine-dev',
+      port: 5672,
+      username: 'redmine-dev',
+      password: 'Er3d|01m!n3'
+    )
+
+    begin
+      connection.start
+      channel = connection.create_channel
+      queue = channel.queue('logs-issue', durable: true)
+
+      data = {
+        userId: userId,
+        username: username,
+        phoneNumber: phoneNumber,
+        payload: payload,
+        timestamp: Time.now.utc
+      }.to_json
+
+      channel.default_exchange.publish(data, routing_key: queue.name)
+      logger.info "Publish to RMQ = "+data
     rescue => e
       puts "Unable to publish data to RabbitMQ. Error message: #{e.message}"
     ensure
@@ -86,7 +165,7 @@ module ApplicationHelper
   def link_to_user(user, options={})
     user.is_a?(User) ? link_to_principal(user, options) : h(user.to_s)
   end
-
+  
   # Displays a link to user's account page or group page
   def link_to_principal(principal, options={})
     only_path = options[:only_path].nil? ? true : options[:only_path]
