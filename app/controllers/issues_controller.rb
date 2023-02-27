@@ -17,6 +17,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+require 'date'
+
 class IssuesController < ApplicationController
   default_search_scope :issues
 
@@ -41,6 +43,7 @@ class IssuesController < ApplicationController
   include QueriesHelper
   helper :repositories
   helper :timelog
+  include ApplicationHelper
 
   def index
     use_session = !request.format.csv?
@@ -80,13 +83,6 @@ class IssuesController < ApplicationController
           @issues = @query.issues(:limit => Setting.issues_export_limit.to_i)
           send_file_headers! :type => 'application/pdf', :filename => 'issues.pdf'
         end
-
-        hariIni = helper_method
-        phone_number = User.current.custom_value_for(CustomField.where(name: 'Phone Number').first)
-        phone_number_value = phone_number ? phone_number.value : ''
-
-        ApplicationHelper.log_issue_publish_to_rabbitmq(User.current.id, User.current.name, phone_number_value, { status: 200, message: "#{User.current.name} melihat list issue dari project #{@project.name} pada hari #{hariIni}, tanggal #{Date.today.strftime("%d %B %Y")}, Jam #{Time.now.strftime("%H:%M")}" })
-
       end
     else
       respond_to do |format|
@@ -137,13 +133,6 @@ class IssuesController < ApplicationController
         send_file_headers!(:type => 'application/pdf',
                            :filename => "#{@project.identifier}-#{@issue.id}.pdf")
       end
-      hariIni = helper_method
-      phone_number = User.current.custom_value_for(CustomField.where(name: 'Phone Number').first)
-      phone_number_value = phone_number ? phone_number.value : ''
-
-      ApplicationHelper.log_issue_publish_to_rabbitmq(User.current.id, User.current.name, phone_number_value, { status: 200, message: "#{User.current.name} Melihat issue #{@issue.subject} dari project #{@project.name} Pada hari #{hariIni}, tanggal #{Date.today.strftime("%d %B %Y")}, Jam #{Time.now.strftime("%H:%M")}" })
-
-
     end
   end
 
@@ -163,6 +152,39 @@ class IssuesController < ApplicationController
     @issue.save_attachments(params[:attachments] || (params[:issue] && params[:issue][:uploads]))
     if @issue.save
       call_hook(:controller_issues_new_after_save, {:params => params, :issue => @issue})
+      
+      # Get issue data
+      issue_name = @issue.subject
+      issue_id = @issue.id
+      project_name = @issue.project.name
+      created_by = @issue.author.name
+      deadline = @issue.due_date.strftime('%d-%m-%y %H:%M')
+      deadlineDate = deadline ? deadline : nil
+      url = issue_url(@issue)
+
+      hariIni = helper_method
+
+      # Get assigned member data
+      assigned_to = @issue.assigned_to.name
+      assigned_to_phone_number = @issue.assigned_to.custom_value_for(CustomField.where(name: 'Phone Number').first)
+      assigned_to_phone_number_value = assigned_to_phone_number ? assigned_to_phone_number.value : ''
+      
+      # Get Watchers data
+      watchers = @issue.watchers
+      if watchers.present?
+        watchers.each do |watcher|
+          watcher_name = watcher.user.name
+          watcher_phone_number = watcher.user.custom_value_for(CustomField.where(name: 'Phone Number').first)
+          watcher_phone_number_value = watcher_phone_number ? watcher_phone_number.value : ''
+
+          puts "watchers pada issues #{issue_name} adalah #{watcher_name} dengan nomor telephone #{watcher_phone_number_value}"
+
+          ApplicationHelper.log_watchers_issues_publish_to_rabbitmq(issue_id, issue_name, watcher_name, watcher_phone_number_value, {status: 200, message: "*#{watcher_name}* ditambahkan oleh *#{created_by}* sebagai watcher pada issue #{issue_name} dalam project #{project_name} yang di assignedkan ke *#{assigned_to}* pada hari #{hariIni}"}.to_json)
+        end
+      end
+
+      ApplicationHelper.log_issues_publish_to_rabbitmq(issue_id, issue_name, assigned_to, assigned_to_phone_number_value, {status: 200, message: "*#{assigned_to}* mendapatkan issue assignment: #{issue_name} dari *#{created_by}* pada project #{project_name} pada hari #{hariIni} dengan deadline issue pada tanggal #{deadlineDate}, Akses detail issue di: #{url}"}.to_json)
+      
       respond_to do |format|
         format.html do
           render_attachment_warning_if_needed(@issue)
@@ -190,13 +212,6 @@ class IssuesController < ApplicationController
         format.api  {render_validation_errors(@issue)}
       end
     end
-    hariIni = helper_method
-    phone_number = User.current.custom_value_for(CustomField.where(name: 'Phone Number').first)
-    phone_number_value = phone_number ? phone_number.value : ''
-
-    ApplicationHelper.log_issue_publish_to_rabbitmq(User.current.id, User.current.name, phone_number_value, { status: 200, message: "#{User.current.name} Menambahkan issue baru dari #{@project.name} Pada hari #{hariIni}, tanggal #{Date.today.strftime("%d %B %Y")}, Jam #{Time.now.strftime("%H:%M")}" })
-
-
   end
 
   def edit
@@ -246,13 +261,6 @@ class IssuesController < ApplicationController
         format.api  {render_validation_errors(@issue)}
       end
     end
-    hariIni = helper_method
-    phone_number = User.current.custom_value_for(CustomField.where(name: 'Phone Number').first)
-    phone_number_value = phone_number ? phone_number.value : ''
-
-    ApplicationHelper.log_issue_publish_to_rabbitmq(User.current.id, User.current.name, phone_number_value, { status: 200, message: "#{User.current.name} Mengupdate issue #{@issue.subject} dari project #{@project.name} Pada hari #{hariIni}, tanggal #{Date.today.strftime("%d %B %Y")}, Jam #{Time.now.strftime("%H:%M")}" })
-
-
   end
 
   def issue_tab
@@ -490,13 +498,6 @@ class IssuesController < ApplicationController
       end
       format.api  {render_api_ok}
     end
-    hariIni = helper_method
-    phone_number = User.current.custom_value_for(CustomField.where(name: 'Phone Number').first)
-    phone_number_value = phone_number ? phone_number.value : ''
-
-    ApplicationHelper.log_issue_publish_to_rabbitmq(User.current.id, User.current.name, phone_number_value, { status: 200, message: "#{User.current.name} Menghapus issue dari Project #{@project.name} Pada hari #{hariIni}, tanggal #{Date.today.strftime("%d %B %Y")}, Jam #{Time.now.strftime("%H:%M")}" })
-
-
   end
 
   # Overrides Redmine::MenuManager::MenuController::ClassMethods for
